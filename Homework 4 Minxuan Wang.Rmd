@@ -1,0 +1,338 @@
+---
+title: "Homework 4"
+author: "Minxuan Wang"
+date: "November 2017"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1
+## a.
+```{r}
+data.cost<-read.table("TableF4-4.txt",head=TRUE)
+attach(data.cost)
+
+## Compute each terms
+lnCPf<-log(cost/pf)
+lnQ<-log(q)
+lnQ2<-0.5*(lnQ)^2
+lnPkPf<-log(pk/pf)
+lnPlPf<-log(pl/pf)
+
+## Linear regression
+fitlm_cost<-lm(lnCPf~lnQ+lnQ2+lnPkPf+lnPlPf)
+summary(fitlm_cost)
+
+## Asymptotic covariance matrix
+cov_matrix<-vcov(fitlm_cost)
+cov_matrix
+```
+
+## b.
+```{r}
+## Compute delta f
+delta_f<-1-coefficients(fitlm_cost)[4]-coefficients(fitlm_cost)[5]
+delta_f
+estmean<-coef(fitlm_cost)[4:5]
+estvar<-vcov(fitlm_cost)[4:5,4:5]
+
+## Estimate the asymptotic standard error
+library("msm")
+deltamethod(~1-x1-x2,estmean,estvar)
+```
+
+## c.
+```{r}
+beta<-coefficients(fitlm_cost)[2]
+gamma<-coefficients(fitlm_cost)[3]
+est.Q<-exp((1-beta)/gamma)
+est.Q
+est.Q_mean<-coef(fitlm_cost)[2:3]
+est.Q_var<-vcov(fitlm_cost)[2:3,2:3]
+
+## Standard error
+se.Q<-deltamethod(~exp((1-x1)/x2),est.Q_mean,est.Q_var)
+lowerbound<-est.Q-qnorm(0.975)*se.Q
+upperbound<-est.Q+qnorm(0.975)*se.Q
+
+## 95% confidence interval
+IC<-c(lowerbound,upperbound)
+IC 
+```
+
+## d.
+```{r}
+## Pick out the firms sets
+firms1<-subset(data.cost,data.cost$q>=lowerbound)
+firms2<-subset(firms1,firms1$q<=upperbound)
+
+## Compute the number of firms that reached the efficient scale
+length(firms2$q)
+```
+
+# Question 2
+## a.
+```{r}
+setwd("D:/Econ 403A/Homework 4")
+merged.data<-read.csv("Koop-Tobias.csv") # Get from NYU Stern
+
+## Define the variables name in R 
+educ<-merged.data$EDUC
+logwage<-merged.data$LOGWAGE
+potexper<-merged.data$POTEXPER
+ability<-merged.data$ABILITY
+mothered<-merged.data$MOTHERED
+fathered<-merged.data$FATHERED
+brknhome<-merged.data$BRKNHOME
+siblings<-merged.data$SIBLINGS 
+
+## Linear regression
+lm1<-lm(logwage~educ+potexper+ability)
+lm1
+lm2<-lm(logwage~-1+mothered+fathered+brknhome+siblings)
+lm2
+```
+
+## b/c.   
+The F-test is the statistic for the hypothesis test with null hypothesis and alternate hypothesis:   
+  H0: All non-constant coefficients in the regression equation are zero   
+  Ha: At least one of the non-constant coefficients in the regression equation is non-zero.
+```{r}
+summary(lm1)
+summary(lm2)
+```
+p-value: < 2.2e-16, which means that we reject the H0, model has predictive capability.   
+
+Numerically, we can the defination of F statistic (using the first model as an example): 
+```{r}
+anova(lm1)
+## SS(Regression)=SS(Total)-S(Residual)
+
+## Get the SST value
+SST_1<-var(logwage)*(nrow(merged.data)-1)
+
+## Get the SSE value
+SSE_1<-sum(lm1$residual^2)
+
+## Get the SSR value
+SSR_1<-SST_1-SSE_1
+
+## Get the degree of freedom
+dfE_1<-lm1$df.residual
+dfReg_1<-nrow(merged.data)-1-dfE_1
+MSreg_1<-SSR_1/dfReg_1
+MSE_1<-SSE_1/dfE_1
+Fstat_1<-MSreg_1/MSE_1
+pvalue_1<-pf(Fstat_1,dfReg_1,dfE_1,lower.tail=FALSE)
+```
+
+## d. Wald test
+```{r}
+library(survey)
+regTermTest(lm2,"mothered")
+regTermTest(lm2,"fathered")
+regTermTest(lm2,"brknhome")
+regTermTest(lm2,"siblings")
+```
+
+# Question 3
+## (i). 
+```{r}
+load("D:/Econ 403A/Homework 4/401ksubs.RData")
+attach(data)
+nettfa<-data$nettfa
+mean(nettfa)
+sd(nettfa)
+max(nettfa)
+min(nettfa)
+```
+
+## (ii).
+```{r}
+## T test
+nettfa_0<-subset(nettfa,data$e401k==0)
+nettfa_1<-subset(nettfa,data$e401k==1)
+t.test(nettfa_0,nettfa_1,
+alternative="two.side",
+paired=FALSE,
+var.equal=FALSE,
+conf.level=.95)
+```
+From the result of t.test, p-value < 2.2e-16, which means we should reject the H0: the average nettfa does not differ by 401(k) eligibility status.    
+The dollar amount difference is:
+```{r}
+mean(nettfa_1)-mean(nettfa_0)
+```
+
+## (iii). 
+```{r}
+e401k<-data$e401k
+inc2<-incsq
+age2<-agesq
+fitlm=lm(nettfa~inc+inc2+age+age2+e401k)
+summary(fitlm)
+```
+From the p-value, this regression model is statistically significant. So the linear equations are:   
+when e401k=1, $nettfa=-23.24+0.008109\times incsq+0.01221\times agesq+8.166$   
+when e401k=0, $nettfa=-23.24+0.008109\times incsq+0.01221\times agesq$  
+The estimated dollar effect of 401(k) eligibility is 8.166    
+
+## (iv). 
+```{r}
+age_41<-age-41
+
+## Regress the model with interaction term
+fitlm_2=lm(nettfa~inc+inc2+age+age2+I(e401k*age_41)+e401k)
+summary(fitlm_2)
+```
+The interaction term is significant because p-value=1.55e-07(t=5.251), the coeffecient is 0.638.   
+
+## (v).      
+The coefficient on e401k at age 41 in these two regressions are 9.705(in part iii the influences at all ages are same) and 9.585, it doesn't differ a lot.   
+
+## (vi).   
+```{r}
+## Define the dummy virables
+fsize1<-as.numeric(fsize==1)
+fsize2<-as.numeric(fsize==2)
+fsize3<-as.numeric(fsize==3)
+fsize4<-as.numeric(fsize==4)
+fsize5<-as.numeric(fsize>=5)
+
+## Add dummy virables to regression model
+fitlm_3<-lm(nettfa~inc+inc2+age+age2+e401k+fsize2+fsize3+fsize4+fsize5)
+summary(fitlm_3)
+anova(fitlm_3)
+```
+## (vii).   
+```{r}
+## Define five conditions
+data_fsize1<-subset.data.frame(data,fsize1=="1")
+data_fsize2<-subset.data.frame(data,fsize2=="1")
+data_fsize3<-subset.data.frame(data,fsize3=="1")
+data_fsize4<-subset.data.frame(data,fsize4=="1")
+data_fsize5<-subset.data.frame(data,fsize5=="1")
+
+## Run the regression
+unreg.1<-lm(nettfa~inc+incsq+age+agesq+e401k,data=data_fsize1)
+unreg.2<-lm(nettfa~inc+incsq+age+agesq+e401k,data=data_fsize2)
+unreg.3<-lm(nettfa~inc+incsq+age+agesq+e401k,data=data_fsize3)
+unreg.4<-lm(nettfa~inc+incsq+age+agesq+e401k,data=data_fsize4)
+unreg.5<-lm(nettfa~inc+incsq+age+agesq+e401k,data=data_fsize5)
+
+## review the regression results
+anova(unreg.1)
+anova(unreg.2)
+anova(unreg.3)
+anova(unreg.4)
+anova(unreg.5)
+anova(fitlm_3)
+
+## Calculate sum of squared residuals for each regression
+SSR_ur<-sum(anova(unreg.1)[6,2],anova(unreg.2)[6,2],anova(unreg.3)[6,2],anova(unreg.4)[6,2],anova(unreg.5)[6,2])
+SSR_ur
+SSR_r<-anova(fitlm_3)[10,2]
+SSR_r
+
+## Computing the Chow test statistic (F-test)
+Chow.F.statistic<-((SSR_r-SSR_ur)/SSR_ur)*(9245/20)
+Chow.F.statistic
+
+## Calculate P-value
+1-pf(Chow.F.statistic,20,9245)
+```
+From the result we can see the p-value is essentially zero. In this case, there is strong evidence that the slopes change across family size.
+
+# Question 4
+## (i).   
+```{r}
+## Estimate simple linear probability model
+fitlm_e401k=lm(e401k~inc+inc2+age+age2+male,data=data)
+summary(fitlm_e401k)
+library(RCurl)
+
+## Import the function
+url_robust<-"https://raw.githubusercontent.com/IsidoreBeautrelet/economictheoryblog/master/robust_summary.R"
+eval(parse(text=getURL(url_robust,ssl.verifypeer=FALSE)),envir=.GlobalEnv)
+
+## Use new summary function
+summary(fitlm_e401k,robust=TRUE)
+```
+All the parameters are statistical significant:   
+$$\widehat{e401k}=-0.506+0.0124\times inc-0.000062\times inc^2+0.0265\times age- 0.00031\times age^2-0.0035\times male$$
+From the two summaries, we can see the Std.Error are almostly the same. So there are no important differences.
+
+## (ii).   
+Notice that the approximate estimator of the random error term $\mu_{i}$ is expressed by the residual $e_{i}$, such that we get:     
+$$Var(\mu_{i})=E(\mu_{i}^2)\approx e_{i}^2$$   
+$$e_{i}=Y_{i}-(\hat{Y_{i}})_{ols}$$   
+We can write this as a regression model in a simple way.   
+$$e_{i}^2=\alpha_0+\alpha_1X_i+\alpha_2X^2+v$$   
+The restrictions are $\alpha_0=0$,$\alpha_1=1$, and $\alpha_2=-1$.
+In the oringinal linear probability model:
+$$\hat{Y_i}=\beta_{0}+\beta_{i}X_{i}$$
+So, when we run the regression $e_{i}^2$ on $\hat{y}_i$ and $\hat{y_{i}^2}$, the intercept estimates should be close to zero, the coefficient on $\hat{y}_i$ should be close to 1, and the coefficient on $\hat{y_{i}^2}$ should be close to ¨C1.
+
+## (iii).   
+```{r}
+## Get the residual squared sequence
+u2<-fitlm_e401k$residuals^2
+
+## Do the linear regression ui2 on yi and yi2
+y<-fitted(fitlm_e401k)
+summary(lm(u2~y+I(y^2)))
+```
+The White F statistic is about 310.3, which is very significant. The coefficient on
+$\widehat{e401k}$ and $\widehat{e401k}^2$ is 1.0097 and -0.9703, the intercept is -0.009.
+The coefficient estimates roughly correspond to the theoretical values described in part (ii).   
+
+## (iv).   
+```{r}
+## Compute the upper bound and lower bound of fitted values
+max(y)
+min(y)
+
+## Fit a WLS model using weights=1/(fitted values)
+fitlm_e401k.wls=lm(e401k~inc+inc2+age+age2+male,data=data,weights=1/y)
+summary(fitlm_e401k.wls)
+```
+$$\widehat{e401k}=-0.4841+0.01277\times inc-0.000062\times inc^2+0.025\times age-0.00029\times age^2-0.00324\times male$$
+They doesn't differ in important ways from the OLS estimates.
+
+# Question 5
+## (i).   
+```{r}
+fitlm2<-lm(nettfa~inc+inc2+age+age2+male+e401k)
+summary(fitlm2)
+```
+$$\widehat{nettfa}=21.198-0.27\times inc+0.0102\times inc^2-1.940\times age+0.0346\times age^2+3.369\times male+9.713\times e401k$$
+The coefficient on e401k is 9.713, which means when other terms are fixed, the mean of net financial assets of a family with e401k=1 is about 9713 greater than the family with e401k=0.   
+
+## (ii).   
+Same as the previous question, we pick out the residuals first and then do the regression of $\hat{\mu_{i}}^2$ on $inc$, $inc^2$, $age$, $age^2$, $male$ and $e401k$.
+```{r}
+## Define the square of residuals
+u2_2<-fitlm2$residuals^2
+
+## Regress the linear model
+summary(lm(u2_2~inc+inc2+age+age2+male+e401k))
+```
+$R^2$=0.0374, F-Statistic is 59.97, p-value: < 2.2e-16. So this model could have heteroskedasticity, which means given the explanatory variablees, the variance of series error is not equal to 0.
+
+## (iii).   
+```{r}
+library(L1pack)
+fitlad<-lad(nettfa~inc+inc2+age+age2+male+e401k)
+summary(fitlad)
+```
+The lad estimate model is:
+$$\widehat{nettfa}=12.4912-0.2616\times inc+0.0071\times inc^2-0.7227\times age+ 0.0111\times age^2+1.0188\times male+3.7373\times e401k$$
+$\beta_6$ is the cofficient of e401k, $\beta$=3.7373, which means when other terms are fixed, the median net financial assets of a family whoes e401k=1 is about 3737 greater than the family with e401k=0.
+
+## (iv).
+401(k) eligibility has a larger effect on mean wealth than on median wealth, which means the 401(k) eligibility has a larger effect when net financial assets are in a high level.
